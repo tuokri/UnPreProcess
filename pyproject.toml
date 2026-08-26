@@ -2,4 +2,11 @@
 name = "unpreprocess"
 version = "0.1.0"
 requires-python = ">=3.14"
-dependencies = []
+readme = {}
+license-files = [
+    "LICENSE",
+]
+
+dependencies = [
+    "click>=8.4.2",
+]
