@@ -85,6 +85,8 @@ def branch_macro(line: str) -> bool:
     return False
 
 
+# TODO: do we need variants for processing
+#  files inplace and with explicit output destination?
 def process_file(file: Path) -> None:
     macro_stack: list[MacroContext] = []
 
