@@ -13,3 +13,7 @@ TODO
 ## Usage
 
 TODO
+
+## Development TODOs
+
+- Verify processed files compile successfully?
