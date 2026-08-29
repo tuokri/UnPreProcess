@@ -4,7 +4,7 @@
 // This file is supposed to be parsed and macros cleaned up for the VS Code UScript
 // LSP addon, which at the time of writing does not have full macro support.
 //
-class SmallClass extends Object
+class SmallClassProcessed extends Object
 	native;
 
 /** the name of the movie to show while loading */
