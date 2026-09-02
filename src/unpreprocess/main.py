@@ -187,7 +187,13 @@ def comment_out(line: str) -> str:
     return f"{UPP_COMMENT_PREFIX}{separator}{line}"
 
 
-def process_source(source: str, definitions: dict[str, Any]) -> str:
+def process_source(
+        source: str,
+        definitions: dict[str, Any],
+        dry_run: bool = False,
+        inplace: bool = False,
+        output_file: Path | None = None,
+) -> str:
     evaluator = UScriptMacroEvaluator(definitions)
     macro_stack: list[MacroContext] = []
     processed_lines: list[str] = []
@@ -240,8 +246,22 @@ def process_source(source: str, definitions: dict[str, Any]) -> str:
 
 # TODO: do we need variants for processing
 #  files inplace and with explicit output destination?
-def process_file(file: Path) -> str:
-    return process_source(file.read_text(), MACRO_DEFINITIONS)
+def process_file(
+        file: Path,
+        dry_run: bool = False,
+        inplace: bool = False,
+        output_file: Path | None = None,
+) -> str:
+    if inplace:
+        output_file = None
+
+    return process_source(
+        file.read_text(),
+        MACRO_DEFINITIONS,
+        dry_run=dry_run,
+        inplace=inplace,
+        output_file=output_file,
+    )
 
 
 @click.command()
@@ -250,16 +270,39 @@ def process_file(file: Path) -> str:
     nargs=-1,
     type=click.Path(exists=True, dir_okay=False, path_type=Path),
 )
-def main(files: tuple[Path]) -> None:
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Run the program without writing any output.",
+)
+@click.option(
+    "--inplace",
+    "-i",
+    is_flag=True,
+    help="Process the files in-place, overwriting them.",
+)
+@click.option(
+    "--define",
+    "-d",
+    multiple=True,
+    help="Define a macro. Can be used multiple times.",
+)
+def main(files: tuple[Path], dry_run: bool, inplace: bool) -> None:
     # TODO: allow taking in a custom list of macro definitions, e.g.;
     #   -d ShippingPC=True
     #   -d DEBUG=ON
     #   --define option=value
 
+    # TODO: the CLI needs some more thought.
+    #   - It does not make sense to take in wildcard files, and then taking
+    #     output paths as well.
+    #   - Having both --dry-run and --inplace seems odd. What happens if
+    #     neither are passed?
+
     for file in files:
         path = Path(file).resolve()
         logger.info("processing '{}'...", path)
-        process_file(path)
+        process_file(path, dry_run=dry_run, inplace=inplace)
 
 
 if __name__ == "__main__":
