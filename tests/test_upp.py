@@ -28,7 +28,15 @@ _script_dir = Path(__file__).parent.resolve()
 _data_dir = _script_dir / "data"
 
 
-def test_upp():
-    process_file(_data_dir / "SmallClass.uc")
+def test_upp(pytestconfig):
+    processed = process_file(_data_dir / "SmallClass.uc")
+    expected = (_data_dir / "processed/SmallClass.uc").read_text()
 
-    assert True
+    # Check .pytest_cache/ to debug the processed file.
+    cache_dir = pytestconfig.cache.mkdir("upp_processed")
+    path = cache_dir / "SmallClass.uc"
+    path.write_text(processed)
+
+    # Easier to see the diff in case the test fails.
+    assert processed.splitlines() == expected.splitlines()
+    assert processed == expected

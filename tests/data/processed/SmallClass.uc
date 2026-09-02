@@ -10,11 +10,11 @@ class SmallClass extends Object
 /** the name of the movie to show while loading */
 const	LOADING_MOVIE	= "LoadingMovie";
 
-`if(false)
-// TODO: double-check what's the correct handling of this block!
-`endif
+///---> `if(false)
+///---> // TODO: double-check what's the correct handling of this block!
+///---> `endif
 
-`if(`isdefined(RO_))
+///---> `if(`isdefined(RO_))
 // This is a comment!
 
 struct TestStruct
@@ -23,23 +23,23 @@ struct TestStruct
     // Nothing here...
 };
 
-`else
-
-// Another comment, inside the "disabled" block.
-
-// This block should be disabled, when RO_ is defined, since we are inside the else block.
-`if(`notdefined(dummy))
-// Ignored.
-var() object DummyObject;
-`endif
-
-struct TestStruct
-{
-    var int YaddaYadda;
-    var float InnitBruv;
-};
-
-`endif
+///---> `else
+///--->
+///---> // Another comment, inside the "disabled" block.
+///--->
+///---> // This block should be disabled, when RO_ is defined, since we are inside the else block.
+///---> `if(`notdefined(dummy))
+///---> // Ignored.
+///---> var() object DummyObject;
+///---> `endif
+///--->
+///---> struct TestStruct
+///---> {
+///--->     var int YaddaYadda;
+///--->     var float InnitBruv;
+///---> };
+///--->
+///---> `endif
 
 /** DEPRECATED.  Defines a camera-animation-driven screenshake. */
 struct native ScreenShakeAnimStruct
@@ -165,9 +165,9 @@ struct native TakeHitInfo
     var class<DamageType>	DamageType;
     /** the weapon that shot us */
     var Pawn				InstigatedBy;
-`ifdef(RO_)
+///---> `ifdef(RO_)
     var Name				HitBone;
-`endif
+///---> `endif
     /** the bone that was hit on our Mesh (if any) */
     var byte				HitBoneIndex;
     /** the physical material that was hit on our Mesh (if any) */
