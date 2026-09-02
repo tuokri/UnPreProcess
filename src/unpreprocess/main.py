@@ -25,22 +25,24 @@ it easier for LSPs to parse the code. This implementation
 is extremely naïve and far from a real preprocessor.
 """
 
+import logging
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import click
+from loguru import logger
+
+logger.remove()
+logger.add(sys.stderr, level=logging.INFO)
 
 UPP_COMMENT_PREFIX = "///--->"
 
-MACRO_ENTER_PREFIXES = [
-    "`if",
-]
-
-MACRO_EXIT_PREFIXES = [
-    "`endif",
-]
+MACRO_HEADER_RE = re.compile(r"^\s*`(?:if|ifdef|ifndef)\b")
+MACRO_EXIT_RE = re.compile(r"^\s*`endif\b")
+MACRO_ELSE_RE = re.compile(r"^\s*`else\b")
 
 # TODO: for any macro not defined in this list (or passed to the program by the user),
 #   try to parse them as booleans, interpreting str->bool parse errors as falsy values.
@@ -140,103 +142,106 @@ class UScriptMacroEvaluator:
 @dataclass
 class MacroContext:
     name: str
-    enabled: bool
+    condition: bool
+    parent_enabled: bool
     in_else_branch: bool = False
 
-    # TODO: can't we just see depth from the length of the macro_stack?
-    depth: int = 0
+    @property
+    def enabled(self) -> bool:
+        branch_enabled = (
+            not self.condition if self.in_else_branch else self.condition
+        )
+        return self.parent_enabled and branch_enabled
 
 
 def enter_macro(
         line: str,
         evaluator: UScriptMacroEvaluator,
-        current_ctx: MacroContext | None = None,
+        parent_enabled: bool,
 ) -> MacroContext | None:
-    # TODO: should this be a case-insensitive check?
-    entered = any(line.lstrip().startswith(prefix) for prefix in MACRO_ENTER_PREFIXES)
-    if not entered:
+    if not MACRO_HEADER_RE.match(line):
         return None
 
     # Naive ad-hoc parse.
-    enabled = evaluator.evaluate_line(line)
-    if enabled is None:
+    condition = evaluator.evaluate_line(line)
+    if condition is None:
         raise ValueError(f"unsupported macro: '{line}'")
 
     return MacroContext(
         name=line.strip(),
-        enabled=enabled,
-        in_else_branch=current_ctx.in_else_branch if current_ctx else False,
-        depth=current_ctx.depth + 1 if current_ctx else 0,
+        condition=condition,
+        parent_enabled=parent_enabled,
     )
 
 
 def exit_macro(line: str) -> bool:
-    # TODO: should this be a case-insensitive check?
-    return any(line.lstrip().startswith(prefix) for prefix in MACRO_EXIT_PREFIXES)
+    return MACRO_EXIT_RE.match(line) is not None
 
 
 def branch_macro(line: str) -> bool:
-    # TODO: should this be a case-insensitive check?
-    return line.lstrip().startswith("`else")
+    return MACRO_ELSE_RE.match(line) is not None
+
+
+def comment_out(line: str) -> str:
+    separator = "" if not line.rstrip() else " "
+    return f"{UPP_COMMENT_PREFIX}{separator}{line}"
+
+
+def process_source(source: str, definitions: dict[str, Any]) -> str:
+    evaluator = UScriptMacroEvaluator(definitions)
+    macro_stack: list[MacroContext] = []
+    processed_lines: list[str] = []
+
+    for line_number, line in enumerate(source.splitlines(keepends=True), start=1):
+        pop_after_line = False
+
+        if (entered_ctx := enter_macro(
+                line,
+                evaluator,
+                macro_stack[-1].enabled if macro_stack else True,
+        )) is not None:
+            logger.debug("push context: {}", entered_ctx)
+            macro_stack.append(entered_ctx)
+            is_macro_line = True
+        elif branch_macro(line):
+            if not macro_stack:
+                raise ValueError(f"`else without an opening macro at line {line_number}")
+            if macro_stack[-1].in_else_branch:
+                raise ValueError(f"duplicate `else at line {line_number}")
+
+            logger.debug("in else branch for: {}", macro_stack[-1].name)
+            macro_stack[-1].in_else_branch = True
+            is_macro_line = True
+        elif exit_macro(line):
+            if not macro_stack:
+                raise ValueError(f"`endif without an opening macro at line {line_number}")
+
+            logger.debug("pop context: {}", macro_stack[-1])
+            is_macro_line = True
+            pop_after_line = True
+        else:
+            is_macro_line = False
+
+        if is_macro_line or (macro_stack and not macro_stack[-1].enabled):
+            disabled_line = comment_out(line)
+            logger.debug("disabled_line: {}", disabled_line)
+            processed_lines.append(disabled_line)
+        else:
+            processed_lines.append(line)
+
+        if pop_after_line:
+            macro_stack.pop()
+
+    if macro_stack:
+        raise ValueError("unclosed macro conditional")
+
+    return "".join(processed_lines)
 
 
 # TODO: do we need variants for processing
 #  files inplace and with explicit output destination?
 def process_file(file: Path) -> str:
-    evaluator = UScriptMacroEvaluator(MACRO_DEFINITIONS)
-    macro_stack: list[MacroContext] = []
-    lines = file.read_text().splitlines(keepends=True)
-    processed_lines: list[str] = []
-    current_ctx: MacroContext | None = None
-    is_macro_line: bool
-
-    for line in lines:
-        if (entered_ctx := enter_macro(line, evaluator, current_ctx)) is not None:
-            print(f"push context: {entered_ctx}")
-            macro_stack.append(entered_ctx)
-            current_ctx = entered_ctx
-            is_macro_line = True
-        elif macro_stack and exit_macro(line):
-            current_ctx = macro_stack.pop()
-            print(f"pop context: {current_ctx}")
-            is_macro_line = True
-        elif current_ctx and branch_macro(line):
-            print(f"in else branch for: {current_ctx.name}")
-            current_ctx.in_else_branch = True
-            is_macro_line = True
-        else:
-            is_macro_line = False
-
-            # TODO: this feels bad and hacky?
-            if current_ctx and not macro_stack:
-                print("cleared current_ctx")
-                current_ctx = None
-
-        if current_ctx:
-            # Always comment out macro lines.
-            if is_macro_line:
-                line_enabled = False
-            else:
-                line_enabled = current_ctx.enabled
-                if current_ctx.in_else_branch:
-                    line_enabled = not line_enabled
-
-            if not line_enabled:
-                if not line.rstrip():
-                    # Only add whitespace between the prefix and line
-                    # content if the line is not empty.
-                    # ///--->\n
-                    disabled_line = f"{UPP_COMMENT_PREFIX}{line}"
-                else:
-                    # ///---> LINE_CONTENT_HERE\n
-                    disabled_line = f"{UPP_COMMENT_PREFIX} {line}"
-
-                print(f"{disabled_line=}")
-                line = disabled_line
-
-        processed_lines.append(line)
-
-    return "".join(processed_lines)
+    return process_source(file.read_text(), MACRO_DEFINITIONS)
 
 
 @click.command()
@@ -253,7 +258,7 @@ def main(files: tuple[Path]) -> None:
 
     for file in files:
         path = Path(file).resolve()
-        print(f"processing '{path}'...")
+        logger.info("processing '{}'...", path)
         process_file(path)
 
 

@@ -9,6 +9,7 @@ license-files = [
 
 dependencies = [
     "click>=8.5.0",
+    "loguru>=0.7.3",
 ]
 
 [dependency-groups]

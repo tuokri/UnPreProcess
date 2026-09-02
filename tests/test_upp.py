@@ -22,7 +22,10 @@
 
 from pathlib import Path
 
+import pytest
+
 from unpreprocess.main import process_file
+from unpreprocess.main import process_source
 
 _script_dir = Path(__file__).parent.resolve()
 _data_dir = _script_dir / "data"
@@ -40,3 +43,58 @@ def test_upp(pytestconfig):
     # Easier to see the diff in case the test fails.
     assert processed.splitlines() == expected.splitlines()
     assert processed == expected
+
+
+def test_nested_macros_respect_parent_enablement():
+    processed = process_source(
+        "`if(false)\n"
+        "outer disabled\n"
+        "`if(true)\n"
+        "inner must stay disabled\n"
+        "`endif\n"
+        "outer remains disabled\n"
+        "`endif\n"
+        "outside\n",
+        {},
+    )
+
+    assert processed == (
+        "///---> `if(false)\n"
+        "///---> outer disabled\n"
+        "///---> `if(true)\n"
+        "///---> inner must stay disabled\n"
+        "///---> `endif\n"
+        "///---> outer remains disabled\n"
+        "///---> `endif\n"
+        "outside\n"
+    )
+
+
+def test_else_after_nested_macro_applies_to_outer_macro():
+    processed = process_source(
+        "`if(true)\n"
+        "outer enabled\n"
+        "`if(false)\n"
+        "inner disabled\n"
+        "`endif\n"
+        "`else\n"
+        "outer else disabled\n"
+        "`endif\n",
+        {},
+    )
+
+    assert processed == (
+        "///---> `if(true)\n"
+        "outer enabled\n"
+        "///---> `if(false)\n"
+        "///---> inner disabled\n"
+        "///---> `endif\n"
+        "///---> `else\n"
+        "///---> outer else disabled\n"
+        "///---> `endif\n"
+    )
+
+
+def test_unmatched_endif_is_rejected():
+    with pytest.raises(ValueError):
+        process_source("`endif\n", {})
