@@ -274,17 +274,6 @@ def main(
         dry_run: bool,
         define: tuple[str],
 ) -> None:
-    # TODO: allow taking in a custom list of macro definitions, e.g.;
-    #   -d ShippingPC=True
-    #   -d DEBUG=ON
-    #   --define option=value
-
-    # TODO: the CLI needs some more thought.
-    #   - It does not make sense to take in wildcard files, and then taking
-    #     output paths as well.
-    #   - Having both --dry-run and --inplace seems odd. What happens if
-    #     neither are passed?
-
     # Do a simple -d KEY=VALUE parse.
     # TODO: maybe also allow clearing the hard-coded global definitions?
     for d in define:
