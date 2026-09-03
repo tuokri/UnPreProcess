@@ -33,6 +33,13 @@ struct TestStruct
 var() object DummyObject;
 `endif
 
+// Also ignored.
+`if(`notdefined(FINAL_RELEASE) || `isdefined(RO_))
+// Bla bla.
+`else
+// // Blu blu.
+`endif
+
 struct TestStruct
 {
     var int YaddaYadda;
@@ -211,4 +218,9 @@ struct native AICmdHistoryItem
 
 defaultproperties
 {
+`if((`isdefined(FINAL_RELEASE) || `isdefined(RO_)) && `SOME_WEIRD_IDENTIFIER)
+// Some shite here. Disabled.
+`else
+// Thingy-majingy. Enabled!
+`endif
 }
