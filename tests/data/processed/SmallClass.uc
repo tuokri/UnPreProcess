@@ -218,7 +218,7 @@ struct native AICmdHistoryItem
 
 defaultproperties
 {
-///--->`if((`isdefined(FINAL_RELEASE) || `isdefined(RO_)) && `SOME_WEIRD_IDENTIFIER)
+///---> `if((`isdefined(FINAL_RELEASE) || `isdefined(RO_)) && `SOME_WEIRD_IDENTIFIER)
 ///---> // Some shite here. Disabled.
 ///---> `else
 // Thingy-majingy. Enabled!

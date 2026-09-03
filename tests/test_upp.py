@@ -95,6 +95,21 @@ def test_else_after_nested_macro_applies_to_outer_macro():
     )
 
 
+def test_backtick_prefixed_raw_identifier_is_evaluated():
+    processed = process_source(
+        "`if(`DEFINED && `UNDEFINED)\n"
+        "disabled\n"
+        "`endif\n",
+        {"DEFINED": True},
+    )
+
+    assert processed == (
+        "///---> `if(`DEFINED && `UNDEFINED)\n"
+        "///---> disabled\n"
+        "///---> `endif\n"
+    )
+
+
 def test_unmatched_endif_is_rejected():
     with pytest.raises(ValueError):
         process_source("`endif\n", {})

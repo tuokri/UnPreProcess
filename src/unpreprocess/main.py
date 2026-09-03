@@ -116,7 +116,7 @@ class UScriptMacroEvaluator:
 
         # 3. Resolve literals (`true`/`false`) and raw macro names.
         def _resolve_identifier(match: re.Match) -> str:
-            word = match.group(0)
+            word = match.group(1)
             if word in ("or", "and", "not", "True", "False"):
                 return word
             if word.lower() == "true":
@@ -128,7 +128,9 @@ class UScriptMacroEvaluator:
             val = self.defines.get(word, False)
             return str(bool(val))
 
-        py_expr = re.sub(r"\b[A-Za-z_]\w*\b", _resolve_identifier, cond)
+        logger.debug("cond: {}", cond)
+        py_expr = re.sub(r"`?([A-Za-z_]\w*)\b", _resolve_identifier, cond)
+        logger.debug("py_expr: {}", py_expr)
 
         # 4. Safely evaluate the boolean expression.
         try:
