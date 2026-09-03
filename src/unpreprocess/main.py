@@ -46,7 +46,7 @@ MACRO_ELSE_RE = re.compile(r"^\s*`else\b")
 
 # TODO: for any macro not defined in this list (or passed to the program by the user),
 #   try to parse them as booleans, interpreting str->bool parse errors as falsy values.
-MACRO_DEFINITIONS = {
+MACRO_DEFINITIONS: dict[str, bool | str] = {
     "ShippingPC": True,
     "__TW_WWISE_": True,
     "RO_": True,
@@ -192,9 +192,6 @@ def comment_out(line: str) -> str:
 def process_source(
         source: str,
         definitions: dict[str, Any],
-        dry_run: bool = False,
-        inplace: bool = False,
-        output_file: Path | None = None,
 ) -> str:
     evaluator = UScriptMacroEvaluator(definitions)
     macro_stack: list[MacroContext] = []
@@ -248,21 +245,10 @@ def process_source(
 
 # TODO: do we need variants for processing
 #  files inplace and with explicit output destination?
-def process_file(
-        file: Path,
-        dry_run: bool = False,
-        inplace: bool = False,
-        output_file: Path | None = None,
-) -> str:
-    if inplace:
-        output_file = None
-
+def process_file(file: Path) -> str:
     return process_source(
         file.read_text(),
         MACRO_DEFINITIONS,
-        dry_run=dry_run,
-        inplace=inplace,
-        output_file=output_file,
     )
 
 
@@ -278,18 +264,16 @@ def process_file(
     help="Run the program without writing any output.",
 )
 @click.option(
-    "--inplace",
-    "-i",
-    is_flag=True,
-    help="Process the files in-place, overwriting them.",
-)
-@click.option(
     "--define",
     "-d",
     multiple=True,
     help="Define a macro. Can be used multiple times.",
 )
-def main(files: tuple[Path], dry_run: bool, inplace: bool) -> None:
+def main(
+        files: tuple[Path],
+        dry_run: bool,
+        define: tuple[str],
+) -> None:
     # TODO: allow taking in a custom list of macro definitions, e.g.;
     #   -d ShippingPC=True
     #   -d DEBUG=ON
@@ -301,10 +285,31 @@ def main(files: tuple[Path], dry_run: bool, inplace: bool) -> None:
     #   - Having both --dry-run and --inplace seems odd. What happens if
     #     neither are passed?
 
+    # Do a simple -d KEY=VALUE parse.
+    # TODO: maybe also allow clearing the hard-coded global definitions?
+    for d in define:
+        key, value = d.split("=", maxsplit=1)
+        global MACRO_DEFINITIONS
+        MACRO_DEFINITIONS[key] = value
+
+    # TODO: for high file counts, it would perhaps be nice to have
+    #   a producer and consumer architecture. Right no we just process
+    #   files one by one and overwrite the original.
+
     for file in files:
         path = Path(file).resolve()
         logger.info("processing '{}'...", path)
-        process_file(path, dry_run=dry_run, inplace=inplace)
+
+        # Naive safety check.
+        if not path.suffix == ".uc":
+            raise RuntimeError(f"unsupported file extension: '{path.suffix}'")
+
+        # TODO: backups?
+
+        processed_text = process_file(path)
+        if not dry_run:
+            logger.info("writing '{}'...", path)
+            path.write_text(processed_text)
 
 
 if __name__ == "__main__":
