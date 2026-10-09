@@ -175,6 +175,9 @@ struct native TakeHitInfo
 `ifdef(RO_)
     var Name				HitBone;
 `endif
+`ifndef(RO_)
+// RO_ is defined --> this line should become disabled!
+`endif
     /** the bone that was hit on our Mesh (if any) */
     var byte				HitBoneIndex;
     /** the physical material that was hit on our Mesh (if any) */
