@@ -197,7 +197,7 @@ def process_source(
 ) -> str:
     evaluator = UScriptMacroEvaluator(definitions)
     macro_stack: list[MacroContext] = []
-    processed_lines: list[str] = []
+    processed_lines: list[None] = []  # TODO: type error on purpose!
 
     for line_number, line in enumerate(source.splitlines(keepends=True), start=1):
         pop_after_line = False
