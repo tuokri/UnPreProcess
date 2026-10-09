@@ -21,7 +21,6 @@ dev = [
     "uv-dynamic-versioning>=0.14.1",
 ]
 
-
 [build-system]
 requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
