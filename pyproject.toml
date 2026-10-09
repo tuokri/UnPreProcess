@@ -1,6 +1,6 @@
 [project]
 name = "unpreprocess"
-version = "0.1.0"
+dynamic = ["version"]
 requires-python = ">=3.14"
 readme = "README.md"
 license-files = [
@@ -18,9 +18,20 @@ dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.10",
+    "uv-dynamic-versioning>=0.14.1",
 ]
 
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# https://github.com/dependabot/dependabot-core/issues/12340
+[tool.hatch.version.raw-options]
+fallback_version = "0.0.0-unknown"
+
+[tool.hatch.build.hooks.version]
+path = "src/unpreprocess/_version.py"
