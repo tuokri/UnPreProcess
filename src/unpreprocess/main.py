@@ -35,6 +35,8 @@ from typing import Any
 import click
 from loguru import logger
 
+from unpreprocess import __version__
+
 logger.remove()
 logger.add(sys.stderr, level=logging.INFO)
 
@@ -253,6 +255,7 @@ def process_file(file: Path) -> str:
 
 
 @click.command()
+@click.version_option(__version__)
 @click.argument(
     "files",
     nargs=-1,
