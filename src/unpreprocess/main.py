@@ -278,7 +278,6 @@ def main(
     # TODO: maybe also allow clearing the hard-coded global definitions?
     for d in define:
         key, value = d.split("=", maxsplit=1)
-        global MACRO_DEFINITIONS
         MACRO_DEFINITIONS[key] = value
 
     # TODO: for high file counts, it would perhaps be nice to have
