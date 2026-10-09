@@ -221,3 +221,6 @@ __marimo__/
 
 # JetBrains IDEs
 .idea/
+
+# Dynamic version file
+src/unpreprocess/_version.py
