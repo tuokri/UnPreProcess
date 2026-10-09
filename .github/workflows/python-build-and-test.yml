@@ -1,0 +1,155 @@
+name: Python package builds and tests
+
+# TODO: only generate coverage badge once, if all steps pass!
+# TODO: do we more dynamic keys for ruff, mypy and pytest caches?
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ "ubuntu-latest", "windows-latest" ]
+        python-version: [ "3.14" ]
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: ./uv.lock
+
+      - name: Install the project
+        run: |
+          uv sync --all-extras --dev --frozen
+
+      - name: Build project
+        run: |
+          uv build
+
+      - name: Store/restore mypy cache
+        uses: actions/cache@v6
+        with:
+          path: ./.mypy_cache
+          key: mypy-cache-${{ matrix.os }}-python-${{ matrix.python-version }}
+
+      - name: Store/restore ruff cache
+        uses: actions/cache@v6
+        with:
+          path: ./.ruff_cache
+          key: ruff-cache-${{ matrix.os }}-python-${{ matrix.python-version }}
+
+      - name: Store/restore pytest cache
+        uses: actions/cache@v6
+        with:
+          path: ./.pytest_cache
+          key: pytest-cache-${{ matrix.os }}-python-${{ matrix.python-version }}
+
+      - name: Run mypy
+        shell: bash
+        continue-on-error: true
+        run: |
+          uv run mypy . --output=json | jq -r '"::error title=Mypy issue,file=\(.file),line=\(.line),col=\(.column)::\(.message)"'
+
+      - name: Run Ruff
+        uses: astral-sh/ruff-action@v3
+        continue-on-error: true
+        with:
+          src: .
+
+      - name: Run pytest
+        run: >
+          uv run pytest -s --cov=unpreprocess -vv
+          --cov-report html:cov_html
+          --cov-report xml:coverage.xml
+          && uv run pytest -s -vv tools/
+
+      - name: Store test reports
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: pytest-coverage-html-${{ matrix.os }}-python-${{ matrix.python-version }}
+          path: |
+            cov_html
+            coverage.xml
+
+      - name: Generate coverage badge
+        run: >
+          uv run genbadge coverage 
+          --output-file=coverage-badge.svg 
+          --input-file=coverage.xml
+          --name='unpreprocess coverage' 
+
+      - name: Store generated badges
+        uses: actions/upload-artifact@v7
+        with:
+          name: badges-${{ matrix.os }}-python-${{ matrix.python-version }}
+          path: |
+            coverage-badge.svg
+
+      - name: Generate build metadata
+        working-directory: ./dist
+        shell: bash
+        run: |
+          mkdir -p .
+
+          {
+            echo "build_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo "git_commit=${GITHUB_SHA}"
+            echo "git_ref=${GITHUB_REF}"
+            echo "git_ref_name=${GITHUB_REF_NAME}"
+            echo "git_head_ref=${GITHUB_HEAD_REF}"
+            echo "git_base_ref=${GITHUB_BASE_REF}"
+            echo "git_repository=${GITHUB_REPOSITORY}"
+            echo "git_event=${GITHUB_EVENT_NAME}"
+
+            echo "workflow=${GITHUB_WORKFLOW}"
+            echo "workflow_run_id=${GITHUB_RUN_ID}"
+            echo "workflow_run_number=${GITHUB_RUN_NUMBER}"
+            echo "workflow_attempt=${GITHUB_RUN_ATTEMPT}"
+
+            echo "actor=${GITHUB_ACTOR}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+
+            echo "matrix_os=${{ matrix.os }}"
+            echo "matrix_python=${{ matrix.python-version }}"
+
+            echo "repo_url=https://github.com/${GITHUB_REPOSITORY}"
+            echo "commit_url=https://github.com/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+            echo "run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } > build_metadata.txt
+
+          cat build_metadata.txt
+
+      - name: Store built Python packages
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: unpreprocess-dist-${{ matrix.os }}-python-${{ matrix.python-version }}
+          path: dist
+
+      - name: Minimize uv cache
+        run: uv cache prune --ci
+
+  publish-gh-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [ build ]
+    uses: ./.github/workflows/publish-gh-pages.yml
