@@ -281,3 +281,4 @@ def test_macros_inside_block_comments_are_ignored():
     )
 
     assert process_source(source, {"ShippingPC": True}) == source
+    assert process_source(source, {"ShippingPC": False}) == source
