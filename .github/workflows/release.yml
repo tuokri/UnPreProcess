@@ -1,0 +1,92 @@
+# MIT License
+#
+# Copyright (c) 2026 Tuomo Kriikkula
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+name: Release Windows executable
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+    steps:
+      - name: Extract version from tag
+        id: set-version
+        run: |
+          # Strip leading 'v' from tag name
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-exe:
+    needs: prepare
+    uses: ./.github/workflows/build-exe.yml
+    with:
+      expected-version: ${{ needs.prepare.outputs.version }}
+
+  release:
+    needs: [ prepare, build-exe ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download executable
+        uses: actions/download-artifact@v8
+        with:
+          name: unpreprocess-exe-windows-x64
+          path: artifacts
+
+      - name: Prepare release assets
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          exe_name="unpreprocess-${version}-windows-x64.exe"
+          cp "artifacts/unpreprocess.exe" "$exe_name"
+          sha256sum "$exe_name" > "${exe_name}.sha256"
+          echo "EXE_NAME=$exe_name" >> "$GITHUB_ENV"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          exe="$EXE_NAME"
+          sha="${exe}.sha256"
+
+          # Try to create the release; if it already exists, upload assets
+          if gh release view "$tag" --json id --jq '.id' >/dev/null 2>&1; then
+            echo "Release $tag already exists, uploading assets..."
+            gh release upload "$tag" "$exe" "$sha" --clobber
+          else
+            echo "Creating release $tag..."
+            gh release create "$tag" "$exe" "$sha" --generate-notes --verify-tag
+          fi

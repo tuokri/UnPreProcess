@@ -12,7 +12,23 @@ plugin for Visual Studio Code not break on macros.
 
 ## Installation
 
-TODO
+### Windows Executable (no Python required)
+
+Download the latest `unpreprocess-<version>-windows-x64.exe` from the
+[Releases](https://github.com/tuokri/UnPreProcess/releases) page.
+
+# TODO: steps for checksum verification?
+
+### From Source
+
+Requires Python 3.14 and [uv](https://docs.astral.sh/uv/):
+
+```bash
+git clone https://github.com/tuokri/UnPreProcess.git
+cd UnPreProcess
+uv sync
+uv run python -m unpreprocess.main --help
+```
 
 ## Usage
 

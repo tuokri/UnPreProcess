@@ -100,16 +100,12 @@ def test_else_after_nested_macro_applies_to_outer_macro():
 
 def test_backtick_prefixed_raw_identifier_is_evaluated():
     processed = process_source(
-        "`if(`DEFINED && `UNDEFINED)\n"
-        "disabled\n"
-        "`endif\n",
+        "`if(`DEFINED && `UNDEFINED)\ndisabled\n`endif\n",
         {"DEFINED": True},
     )
 
     assert processed == (
-        "///---> `if(`DEFINED && `UNDEFINED)\n"
-        "///---> disabled\n"
-        "///---> `endif\n"
+        "///---> `if(`DEFINED && `UNDEFINED)\n///---> disabled\n///---> `endif\n"
     )
 
 
@@ -117,19 +113,23 @@ def test_backtick_prefixed_raw_identifier_is_evaluated():
     ("source", "message"),
     [
         pytest.param(
-            "`if true\n", "unsupported macro:",
+            "`if true\n",
+            "unsupported macro:",
             id="missing-opening-parenthesis",
         ),
         pytest.param(
-            "`if((true)\n", "unsupported macro:",
+            "`if((true)\n",
+            "unsupported macro:",
             id="missing-closing-parenthesis",
         ),
         pytest.param(
-            "`if(true &&)\n", "error evaluating expression:",
+            "`if(true &&)\n",
+            "error evaluating expression:",
             id="invalid-expression",
         ),
         pytest.param(
-            "`if(1 / 0)\n", "error evaluating expression:",
+            "`if(1 / 0)\n",
+            "error evaluating expression:",
             id="expression-runtime-error",
         ),
         pytest.param(
@@ -148,11 +148,13 @@ def test_backtick_prefixed_raw_identifier_is_evaluated():
             id="duplicate-else-in-disabled-parent",
         ),
         pytest.param(
-            "`if(true)\n", "unclosed macro conditional",
+            "`if(true)\n",
+            "unclosed macro conditional",
             id="unclosed-enabled-conditional",
         ),
         pytest.param(
-            "`if(false)\n", "unclosed macro conditional",
+            "`if(false)\n",
+            "unclosed macro conditional",
             id="unclosed-disabled-conditional",
         ),
         pytest.param(
@@ -173,34 +175,46 @@ def test_invalid_macro_source_is_rejected(source, message):
     ("filename", "source", "options", "exception_type", "message"),
     [
         pytest.param(
-            "input.txt", "ordinary line\n", [],
-            RuntimeError, "unsupported file extension: '.txt'",
+            "input.txt",
+            "ordinary line\n",
+            [],
+            RuntimeError,
+            "unsupported file extension: '.txt'",
             id="unsupported-extension",
         ),
         pytest.param(
-            "input.uc", "ordinary line\n", ["--define", "BROKEN"],
-            ValueError, "not enough values to unpack",
+            "input.uc",
+            "ordinary line\n",
+            ["--define", "BROKEN"],
+            ValueError,
+            "not enough values to unpack",
             id="define-without-equals",
         ),
         pytest.param(
-            "input.uc", "`if(true &&)\n", [],
-            ValueError, "error evaluating expression:",
+            "input.uc",
+            "`if(true &&)\n",
+            [],
+            ValueError,
+            "error evaluating expression:",
             id="invalid-expression",
         ),
         pytest.param(
-            "input.uc", "`if(true)\n", [],
-            ValueError, "unclosed macro conditional",
+            "input.uc",
+            "`if(true)\n",
+            [],
+            ValueError,
+            "unclosed macro conditional",
             id="unclosed-conditional",
         ),
     ],
 )
 def test_cli_error_preserves_input(
-        tmp_path,
-        filename,
-        source,
-        options,
-        exception_type,
-        message,
+    tmp_path,
+    filename,
+    source,
+    options,
+    exception_type,
+    message,
 ):
     path = tmp_path / filename
     path.write_text(source)
@@ -277,7 +291,7 @@ def test_macros_inside_block_comments_are_ignored():
         "`endif\n"
         "*/\n"
         "// `endif\n"
-        "x = \"/*\"; `endif_not_a_comment\n"
+        'x = "/*"; `endif_not_a_comment\n'
     )
 
     assert process_source(source, {"ShippingPC": True}) == source

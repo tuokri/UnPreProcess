@@ -31,11 +31,11 @@ import logging
 import re
 import sys
 import time
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from typing import Iterable
 
 import click
 from loguru import logger
@@ -109,12 +109,12 @@ class UScriptMacroEvaluator:
         cond = re.sub(
             r"`isdefined\s*\(\s*([A-Za-z_]\w*)\s*\)",
             lambda m: str(m.group(1) in self.defines),
-            cond
+            cond,
         )
         cond = re.sub(
             r"`notdefined\s*\(\s*([A-Za-z_]\w*)\s*\)",
             lambda m: str(m.group(1) not in self.defines),
-            cond
+            cond,
         )
 
         # 2. Convert standard C-style boolean operators to Python equivalents.
@@ -157,16 +157,14 @@ class MacroContext:
 
     @property
     def enabled(self) -> bool:
-        branch_enabled = (
-            not self.condition if self.in_else_branch else self.condition
-        )
+        branch_enabled = not self.condition if self.in_else_branch else self.condition
         return self.parent_enabled and branch_enabled
 
 
 def enter_macro(
-        line: str,
-        evaluator: UScriptMacroEvaluator,
-        parent_enabled: bool,
+    line: str,
+    evaluator: UScriptMacroEvaluator,
+    parent_enabled: bool,
 ) -> MacroContext | None:
     if not MACRO_HEADER_RE.match(line):
         return None
@@ -209,7 +207,7 @@ def ends_in_block_comment(line: str, in_block_comment: bool) -> bool:
 
     while i < n:
         c = line[i]
-        pair = line[i:i + 2]
+        pair = line[i : i + 2]
 
         if in_block_comment:
             if pair == "*/":
@@ -237,8 +235,8 @@ def ends_in_block_comment(line: str, in_block_comment: bool) -> bool:
 
 
 def process_source(
-        source: str,
-        definitions: dict[str, Any],
+    source: str,
+    definitions: dict[str, Any],
 ) -> str:
     evaluator = UScriptMacroEvaluator(definitions)
     macro_stack: list[MacroContext] = []
@@ -253,17 +251,21 @@ def process_source(
 
         if line_starts_in_comment:
             is_macro_line = False
-        elif (entered_ctx := enter_macro(
+        elif (
+            entered_ctx := enter_macro(
                 line,
                 evaluator,
                 macro_stack[-1].enabled if macro_stack else True,
-        )) is not None:
+            )
+        ) is not None:
             logger.debug("push context: {}", entered_ctx)
             macro_stack.append(entered_ctx)
             is_macro_line = True
         elif branch_macro(line):
             if not macro_stack:
-                raise ValueError(f"`else without an opening macro at line {line_number}")
+                raise ValueError(
+                    f"`else without an opening macro at line {line_number}"
+                )
             if macro_stack[-1].in_else_branch:
                 raise ValueError(f"duplicate `else at line {line_number}")
 
@@ -272,7 +274,9 @@ def process_source(
             is_macro_line = True
         elif exit_macro(line):
             if not macro_stack:
-                raise ValueError(f"`endif without an opening macro at line {line_number}")
+                raise ValueError(
+                    f"`endif without an opening macro at line {line_number}"
+                )
 
             logger.debug("pop context: {}", macro_stack[-1])
             is_macro_line = True
@@ -388,11 +392,11 @@ def process_file(file: Path, dry_run: bool = False):
     help="Number of parallel jobs to run. Defaults to 1.",
 )
 def main(
-        files: tuple[Path],
-        dry_run: bool,
-        define: tuple[str],
-        recursive: bool,
-        jobs: int,
+    files: tuple[Path],
+    dry_run: bool,
+    define: tuple[str],
+    recursive: bool,
+    jobs: int,
 ) -> None:
     begin = time.perf_counter()
 
