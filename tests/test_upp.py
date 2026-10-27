@@ -262,3 +262,22 @@ def test_cli_glob_pattern_without_recursive_is_rejected(tmp_path, monkeypatch):
 def test_unmatched_endif_is_rejected():
     with pytest.raises(ValueError):
         process_source("`endif\n", {})
+
+
+def test_macros_inside_block_comments_are_ignored():
+    source = (
+        "if (a)\n"
+        "{\n"
+        "/*\t`ifndef(ShippingPC)\n"
+        "\tfoo();\n"
+        "\t`endif*/\n"
+        "\tbar();\n"
+        "}\n"
+        "/*\n"
+        "`endif\n"
+        "*/\n"
+        "// `endif\n"
+        "x = \"/*\"; `endif_not_a_comment\n"
+    )
+
+    assert process_source(source, {"ShippingPC": True}) == source

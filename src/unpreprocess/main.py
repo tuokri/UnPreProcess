@@ -30,6 +30,7 @@ import glob
 import logging
 import re
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -195,6 +196,46 @@ def comment_out(line: str) -> str:
     return f"{UPP_COMMENT_PREFIX}{separator}{line}"
 
 
+def ends_in_block_comment(line: str, in_block_comment: bool) -> bool:
+    """Returns whether a `/* ... */` block comment is still open at the end
+    of the line, given whether one was open at the start of the line.
+
+    Handles `//` line comments and string/name literals so that comment
+    markers inside them do not affect the state.
+    """
+    i = 0
+    n = len(line)
+    quote: str | None = None
+
+    while i < n:
+        c = line[i]
+        pair = line[i:i + 2]
+
+        if in_block_comment:
+            if pair == "*/":
+                in_block_comment = False
+                i += 2
+                continue
+        elif quote is not None:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif pair == "//":
+            break
+        elif pair == "/*":
+            in_block_comment = True
+            i += 2
+            continue
+        elif c in ('"', "'"):
+            quote = c
+
+        i += 1
+
+    return in_block_comment
+
+
 def process_source(
         source: str,
         definitions: dict[str, Any],
@@ -202,11 +243,17 @@ def process_source(
     evaluator = UScriptMacroEvaluator(definitions)
     macro_stack: list[MacroContext] = []
     processed_lines: list[str] = []  # TODO: type error on purpose!
+    in_block_comment = False
 
     for line_number, line in enumerate(source.splitlines(keepends=True), start=1):
         pop_after_line = False
+        # Macros inside block comments are not real macros, ignore them.
+        line_starts_in_comment = in_block_comment
+        in_block_comment = ends_in_block_comment(line, in_block_comment)
 
-        if (entered_ctx := enter_macro(
+        if line_starts_in_comment:
+            is_macro_line = False
+        elif (entered_ctx := enter_macro(
                 line,
                 evaluator,
                 macro_stack[-1].enabled if macro_stack else True,
@@ -347,6 +394,8 @@ def main(
         recursive: bool,
         jobs: int,
 ) -> None:
+    begin = time.perf_counter()
+
     # Do a simple -d KEY=VALUE parse.
     # TODO: maybe also allow clearing the hard-coded global definitions?
     for d in define:
@@ -376,6 +425,9 @@ def main(
         if exc is not None:
             logger.error("error processing '{}': {}: {}", path, type(exc).__name__, exc)
             raise exc
+
+    end = time.perf_counter()
+    logger.info("processed {} files in {:.2f} seconds", len(futures), end - begin)
 
 
 if __name__ == "__main__":
