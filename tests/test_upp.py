@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+from unpreprocess.main import MACRO_DEFINITIONS
 from unpreprocess.main import main
-from unpreprocess.main import process_file
 from unpreprocess.main import process_source
 
 _script_dir = Path(__file__).parent.resolve()
@@ -34,7 +34,8 @@ _data_dir = _script_dir / "data"
 
 
 def test_upp(pytestconfig):
-    processed = process_file(_data_dir / "SmallClass.uc")
+    input_data = (_data_dir / "SmallClass.uc").read_text()
+    processed = process_source(input_data, MACRO_DEFINITIONS)
     expected = (_data_dir / "processed/SmallClass.uc").read_text()
 
     # Check .pytest_cache/ to debug the processed file.
@@ -194,7 +195,12 @@ def test_invalid_macro_source_is_rejected(source, message):
     ],
 )
 def test_cli_error_preserves_input(
-        tmp_path, filename, source, options, exception_type, message,
+        tmp_path,
+        filename,
+        source,
+        options,
+        exception_type,
+        message,
 ):
     path = tmp_path / filename
     path.write_text(source)
@@ -223,6 +229,34 @@ def test_cli_rejects_directory(tmp_path):
 
     assert result.exit_code == 2
     assert "is a directory" in result.output
+
+
+def test_cli_recursive_expands_glob_patterns(tmp_path, monkeypatch):
+    (tmp_path / "sub" / "deep").mkdir(parents=True)
+    top = tmp_path / "top.uc"
+    nested = tmp_path / "sub" / "deep" / "nested.uc"
+    other = tmp_path / "sub" / "other.txt"
+    source = "`if(false)\nhidden\n`endif\n"
+    for p in (top, nested, other):
+        p.write_text(source)
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(main, ["-r", "**/*.uc"])
+
+    assert result.exit_code == 0, result.output
+    expected = process_source(source, {"dev_build": False})
+    assert top.read_text() == expected
+    assert nested.read_text() == expected
+    assert other.read_text() == source
+
+
+def test_cli_glob_pattern_without_recursive_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(main, ["*.uc"])
+
+    assert result.exit_code == 2
+    assert "does not exist" in result.output
 
 
 def test_unmatched_endif_is_rejected():

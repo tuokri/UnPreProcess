@@ -25,12 +25,16 @@ it easier for LSPs to parse the code. This implementation
 is extremely naïve and far from a real preprocessor.
 """
 
+import concurrent.futures
+import glob
 import logging
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from typing import Iterable
 
 import click
 from loguru import logger
@@ -245,13 +249,63 @@ def process_source(
     return "".join(processed_lines)
 
 
+def expand_patterns(patterns: Iterable[Path], recursive: bool) -> list[Path]:
+    """Expands the given paths into a de-duplicated list of files.
+
+    Without `recursive`, every path must be an existing file.
+    With `recursive`, paths containing glob patterns (`*`, `?`, `[...]`,
+    and `**` for recursive directory matching) are expanded to all matching
+    files. Paths without patterns are treated as literal file paths.
+    """
+    expanded: list[Path] = []
+    seen: set[Path] = set()
+
+    for pattern in patterns:
+        pattern_str = str(pattern)
+
+        if recursive and glob.has_magic(pattern_str):
+            matches = sorted(
+                Path(m)
+                for m in glob.glob(pattern_str, recursive=True)
+                if Path(m).is_file()
+            )
+            if not matches:
+                logger.warning("pattern '{}' did not match any files", pattern_str)
+        else:
+            if not pattern.exists():
+                raise click.BadParameter(
+                    f"'{pattern_str}' does not exist.", param_hint="FILES"
+                )
+            if not pattern.is_file():
+                raise click.BadParameter(
+                    f"'{pattern_str}' is a directory.", param_hint="FILES"
+                )
+            matches = [pattern]
+
+        for match in matches:
+            resolved = match.resolve()
+            if resolved not in seen:
+                seen.add(resolved)
+                expanded.append(match)
+
+    return expanded
+
+
 # TODO: do we need variants for processing
 #  files inplace and with explicit output destination?
-def process_file(file: Path) -> str:
-    return process_source(
-        file.read_text(),
+def process_file(file: Path, dry_run: bool = False):
+    # Naive safety check.
+    if file.suffix != ".uc":
+        raise RuntimeError(f"unsupported file extension: '{file.suffix}'")
+
+    processed = process_source(
+        file.read_text(encoding="utf-8", errors="replace"),
         MACRO_DEFINITIONS,
     )
+
+    if not dry_run:
+        logger.info("writing '{}'...", file)
+        file.write_text(processed, encoding="utf-8", errors="replace")
 
 
 @click.command()
@@ -259,7 +313,7 @@ def process_file(file: Path) -> str:
 @click.argument(
     "files",
     nargs=-1,
-    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    type=click.Path(path_type=Path),
 )
 @click.option(
     "--dry-run",
@@ -272,10 +326,26 @@ def process_file(file: Path) -> str:
     multiple=True,
     help="Define a macro. Can be used multiple times.",
 )
+@click.option(
+    "--recursive",
+    "-r",
+    is_flag=True,
+    default=False,
+    help="Interpret files as patterns and recursively process matching files.",
+)
+@click.option(
+    "--jobs",
+    "-j",
+    type=int,
+    default=1,
+    help="Number of parallel jobs to run. Defaults to 1.",
+)
 def main(
         files: tuple[Path],
         dry_run: bool,
         define: tuple[str],
+        recursive: bool,
+        jobs: int,
 ) -> None:
     # Do a simple -d KEY=VALUE parse.
     # TODO: maybe also allow clearing the hard-coded global definitions?
@@ -287,20 +357,25 @@ def main(
     #   a producer and consumer architecture. Right no we just process
     #   files one by one and overwrite the original.
 
-    for file in files:
-        path = Path(file).resolve()
-        logger.info("processing '{}'...", path)
+    # With -r, expand glob patterns (* and **) into all matching files.
+    # Existence is validated here, as patterns need not exist as paths.
+    all_files = expand_patterns(files, recursive)
 
-        # Naive safety check.
-        if not path.suffix == ".uc":
-            raise RuntimeError(f"unsupported file extension: '{path.suffix}'")
+    futures: dict[Path, concurrent.futures.Future] = {}
+    with ThreadPoolExecutor(max_workers=jobs) as executor:
+        for file in all_files:
+            path = Path(file).resolve()
+            logger.info("processing '{}'...", path)
+            # TODO: backups?
+            futures[path] = executor.submit(process_file, path, dry_run=dry_run)
 
-        # TODO: backups?
-
-        processed_text = process_file(path)
-        if not dry_run:
-            logger.info("writing '{}'...", path)
-            path.write_text(processed_text)
+    concurrent.futures.wait(futures.values())
+    for path, future in futures.items():
+        # TODO: maybe report total number of exceptions and then raise the first one?
+        exc = future.exception()
+        if exc is not None:
+            logger.error("error processing '{}': {}: {}", path, type(exc).__name__, exc)
+            raise exc
 
 
 if __name__ == "__main__":
