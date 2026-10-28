@@ -24,11 +24,10 @@
 
 Usage:
     python smoke_test.py <exe_path> [--expected-version X.Y.Z]
-
-TODO: refactor this piece of crap!
 """
 
 import argparse
+import difflib
 import os
 import shutil
 import subprocess
@@ -43,15 +42,14 @@ def run_command(
     cwd: Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run the exe with the given arguments and return the result."""
-    result = subprocess.run(
+    return subprocess.run(
         [str(exe), *args],
         capture_output=True,
         text=True,
         env=env,
-        cwd=str(cwd) if cwd else None,
-        check=True,
+        cwd=cwd,
+        check=False,
     )
-    return result
 
 
 def check_version(exe: Path, expected_version: str | None) -> None:
@@ -69,9 +67,9 @@ def check_version(exe: Path, expected_version: str | None) -> None:
     if "unknown" in output.lower():
         raise SystemExit(f"--version contains 'unknown': {output}")
 
-    if expected_version and expected_version not in output:
+    if expected_version and output.rsplit(maxsplit=1)[-1] != expected_version:
         raise SystemExit(
-            f"--version output does not contain expected version '{expected_version}': {output}"
+            f"--version did not report expected version '{expected_version}': {output}"
         )
 
     print(f"  [OK] --version: {output}")
@@ -112,30 +110,22 @@ def check_processing(exe: Path, repo_root: Path) -> None:
                 f"Processing failed with exit code {result.returncode}: {result.stderr}"
             )
 
-        actual = test_file.read_text()
-        expected = test_expected.read_text()
+        actual = test_file.read_text(encoding="utf-8")
+        expected = test_expected.read_text(encoding="utf-8")
 
         if actual != expected:
-            diff_lines = []
-            actual_lines = actual.splitlines()
-            expected_lines = expected.splitlines()
-            max_len = max(len(actual_lines), len(expected_lines))
-            for i in range(max_len):
-                a_line = actual_lines[i] if i < len(actual_lines) else "<missing>"
-                e_line = expected_lines[i] if i < len(expected_lines) else "<missing>"
-                if a_line != e_line:
-                    diff_lines.append(f"  Line {i + 1}:")
-                    diff_lines.append(f"    Expected: {e_line!r}")
-                    diff_lines.append(f"    Actual:   {a_line!r}")
-                    if len(diff_lines) >= 15:
-                        diff_lines.append("  ... (truncated)")
-                        break
-            raise SystemExit("Output mismatch:\n" + "\n".join(diff_lines))
+            diff = difflib.unified_diff(
+                expected.splitlines(keepends=True),
+                actual.splitlines(keepends=True),
+                fromfile=str(test_expected),
+                tofile=str(test_file),
+            )
+            raise SystemExit("Output mismatch:\n" + "".join(diff))
 
     print("  [OK] File processing matches expected output")
 
 
-def check_scrubbed_env(exe: Path, repo_root: Path) -> None:
+def check_scrubbed_env(exe: Path) -> None:
     """Run the exe with a minimal environment to prove it's standalone."""
     system32 = os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32")
 
@@ -167,24 +157,21 @@ def check_bundle(exe: Path) -> None:
     """Audit the bundle TOC for required DLLs."""
     try:
         from PyInstaller.archive.readers import CArchiveReader
-    except ImportError:
-        print("  [SKIP] PyInstaller not available for bundle audit")
-        return
+    except ImportError as exc:
+        raise SystemExit(
+            "PyInstaller is required to audit the executable bundle"
+        ) from exc
 
     try:
         reader = CArchiveReader(str(exe))
-    except Exception as e:  # noqa: BLE001
-        print(f"  [SKIP] Cannot read archive: {e}")
-        return
+        toc = list(reader.toc)
+    except Exception as exc:
+        raise SystemExit(f"Cannot read executable archive: {exc}") from exc
 
-    toc = list(reader.toc)
     names_lower = {name.lower() for name in toc}
 
     required_dlls = ["python314.dll", "vcruntime140.dll"]
-    missing = []
-    for dll in required_dlls:
-        if dll not in names_lower:
-            missing.append(dll)
+    missing = [dll for dll in required_dlls if dll not in names_lower]
 
     if missing:
         raise SystemExit(f"Bundle is missing required DLLs: {missing}")
@@ -200,7 +187,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    exe = args.exe
+    exe = args.exe.resolve()
     if not exe.exists():
         raise SystemExit(f"Executable not found: {exe}")
 
@@ -211,7 +198,7 @@ def main() -> None:
     check_version(exe, args.expected_version)
     check_help(exe)
     check_processing(exe, repo_root)
-    check_scrubbed_env(exe, repo_root)
+    check_scrubbed_env(exe)
     check_bundle(exe)
 
     print("All checks passed.")

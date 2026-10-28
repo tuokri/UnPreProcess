@@ -12,14 +12,19 @@ plugin for Visual Studio Code not break on macros.
 
 ## Installation
 
-### Windows Executable (no Python required)
+### Windows executable (no Python required)
 
 Download the latest `unpreprocess-<version>-windows-x64.exe` from the
 [Releases](https://github.com/tuokri/UnPreProcess/releases) page.
 
-# TODO: steps for checksum verification?
+Download the matching `.sha256` file as well. On Windows, compare the hash at
+the start of that file with the `Hash` value from:
 
-### From Source
+```powershell
+Get-FileHash .\unpreprocess-*.exe -Algorithm SHA256
+```
+
+### From source
 
 Requires Python 3.14 and [uv](https://docs.astral.sh/uv/):
 
@@ -34,6 +39,20 @@ uv run python -m unpreprocess.main --help
 
 TODO
 
-## Development TODOs
+## Development
+
+### Run verification and build
+
+```bash
+uv sync
+uv run ruff check .
+uv run --group build ty check .
+uv run ty check src tests
+uv run ruff format --check .
+uv run pytest -v
+uv build
+```
+
+### TODOs
 
 - Verify processed files compile successfully?

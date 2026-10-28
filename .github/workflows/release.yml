@@ -60,6 +60,12 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
       - name: Download executable
         uses: actions/download-artifact@v8
         with:
@@ -67,8 +73,10 @@ jobs:
           path: artifacts
 
       - name: Prepare release assets
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          version="${{ needs.prepare.outputs.version }}"
+          version="$VERSION"
           exe_name="unpreprocess-${version}-windows-x64.exe"
           cp "artifacts/unpreprocess.exe" "$exe_name"
           sha256sum "$exe_name" > "${exe_name}.sha256"
