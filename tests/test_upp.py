@@ -26,6 +26,7 @@ import pytest
 from click.testing import CliRunner
 
 from unpreprocess.main import MACRO_DEFINITIONS
+from unpreprocess.main import ends_in_block_comment
 from unpreprocess.main import main
 from unpreprocess.main import process_source
 
@@ -296,3 +297,23 @@ def test_macros_inside_block_comments_are_ignored():
 
     assert process_source(source, {"ShippingPC": True}) == source
     assert process_source(source, {"ShippingPC": False}) == source
+
+
+@pytest.mark.parametrize(
+    ("line", "starts_in_comment", "ends_in_comment"),
+    [
+        ("plain code", False, False),
+        ("/* comment starts", False, True),
+        ("comment ends */ code", True, False),
+        ("/* first */ /* second", False, True),
+        ("code // /* ignored", False, False),
+        ('"/* ignored */"', False, False),
+        ("'/* ignored */'", False, False),
+        (r'"escaped \" /* still quoted"', False, False),
+        (r"'escaped \' /* still quoted'", False, False),
+        ('"unterminated string /* ignored', False, False),
+        ('string " */ closes comment', True, False),
+    ],
+)
+def test_ends_in_block_comment(line, starts_in_comment, ends_in_comment):
+    assert ends_in_block_comment(line, starts_in_comment) is ends_in_comment
