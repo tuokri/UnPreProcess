@@ -37,7 +37,17 @@ uv run python -m unpreprocess.main --help
 
 ## Usage
 
-TODO
+Windows usage example using the release executable.
+
+```PowerShell
+# Display help.
+.\unpreprocess-0.3.3-windows-x64.exe --help
+
+# Process all Rising Storm 2: Vietnam SDK UScript files.
+# The --jobs argument is optional and can be set to the number
+# of your CPU cores to speed up processing in parallel.
+.\unpreprocess-0.3.3-windows-x64.exe --jobs 8 --recursive "C:\Program Files (x86)\Steam\steamapps\common\Rising Storm 2\Development\Src\**\*.uc"
+```
 
 ## Development
 
