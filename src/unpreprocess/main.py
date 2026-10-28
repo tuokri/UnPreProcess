@@ -406,10 +406,6 @@ def main(
         key, value = d.split("=", maxsplit=1)
         MACRO_DEFINITIONS[key] = value
 
-    # TODO: for high file counts, it would perhaps be nice to have
-    #   a producer and consumer architecture. Right no we just process
-    #   files one by one and overwrite the original.
-
     # With -r, expand glob patterns (* and **) into all matching files.
     # Existence is validated here, as patterns need not exist as paths.
     all_files = expand_patterns(files, recursive)
