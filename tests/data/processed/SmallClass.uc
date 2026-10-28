@@ -10,6 +10,14 @@ class SmallClass extends Object
 /** the name of the movie to show while loading */
 const	LOADING_MOVIE	= "LoadingMovie";
 
+/*
+`if(`isdefined(RO_))
+var int BlockCommentedMacro;
+`else
+var int AlsoBlockCommented;
+`endif
+*/
+
 ///---> `if(false)
 ///---> // TODO: double-check what's the correct handling of this block!
 ///---> `endif
