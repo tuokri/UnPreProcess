@@ -47,14 +47,16 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-  build-exe:
+  verify:
     needs: prepare
-    uses: ./.github/workflows/build-exe.yml
+    uses: ./.github/workflows/python-build-and-test.yml
+    permissions:
+      contents: write
     with:
       expected-version: ${{ needs.prepare.outputs.version }}
 
   release:
-    needs: [ prepare, build-exe ]
+    needs: [ prepare, verify ]
     runs-on: ubuntu-latest
     permissions:
       contents: write

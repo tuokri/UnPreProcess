@@ -26,9 +26,15 @@ name: Python package builds and tests
 # TODO: do we more dynamic keys for ruff and pytest caches?
 
 permissions:
-  contents: write
+  contents: read
 
 on:
+  workflow_call:
+    inputs:
+      expected-version:
+        description: "Expected version string (without leading v)"
+        required: false
+        type: string
   push:
     branches: [ "master" ]
   pull_request:
@@ -174,8 +180,12 @@ jobs:
 
   build-exe:
     uses: ./.github/workflows/build-exe.yml
+    with:
+      expected-version: ${{ inputs.expected-version }}
 
   publish-gh-pages:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     needs: [ build ]
+    permissions:
+      contents: write
     uses: ./.github/workflows/publish-gh-pages.yml
