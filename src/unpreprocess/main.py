@@ -300,13 +300,13 @@ def process_source(
     return "".join(processed_lines)
 
 
-def expand_patterns(patterns: Iterable[Path], recursive: bool) -> list[Path]:
+def expand_patterns(patterns: Iterable[Path], expand_globs: bool) -> list[Path]:
     """Expands the given paths into a de-duplicated list of files.
 
-    Without `recursive`, every path must be an existing file.
-    With `recursive`, paths containing glob patterns (`*`, `?`, `[...]`,
-    and `**` for recursive directory matching) are expanded to all matching
-    files. Paths without patterns are treated as literal file paths.
+    Without `expand_globs`, every path must be an existing file. With it,
+    paths containing glob patterns (`*`, `?`, `[...]`) are expanded to all
+    matching files. `**` matches recursively. Paths without patterns
+    are treated as literal file paths.
     """
     expanded: list[Path] = []
     seen: set[Path] = set()
@@ -314,7 +314,7 @@ def expand_patterns(patterns: Iterable[Path], recursive: bool) -> list[Path]:
     for pattern in patterns:
         pattern_str = str(pattern)
 
-        if recursive and glob.has_magic(pattern_str):
+        if expand_globs and glob.has_magic(pattern_str):
             matches = sorted(
                 Path(m)
                 for m in glob.glob(pattern_str, recursive=True)
@@ -378,11 +378,11 @@ def process_file(file: Path, dry_run: bool = False):
     help="Define a macro. Can be used multiple times.",
 )
 @click.option(
-    "--recursive",
-    "-r",
+    "--glob",
+    "-g",
     is_flag=True,
     default=False,
-    help="Interpret files as patterns and recursively process matching files.",
+    help="Expand file arguments as glob patterns. ** matches recursively.",
 )
 @click.option(
     "--jobs",
@@ -395,7 +395,7 @@ def main(
     files: tuple[Path],
     dry_run: bool,
     define: tuple[str],
-    recursive: bool,
+    expand_globs: bool,
     jobs: int,
 ) -> None:
     begin = time.perf_counter()
@@ -406,9 +406,9 @@ def main(
         key, value = d.split("=", maxsplit=1)
         MACRO_DEFINITIONS[key] = value
 
-    # With -r, expand glob patterns (* and **) into all matching files.
+    # With --glob, expand glob patterns (*, ?, [...], and **) into matching files.
     # Existence is validated here, as patterns need not exist as paths.
-    all_files = expand_patterns(files, recursive)
+    all_files = expand_patterns(files, expand_globs)
 
     futures: dict[Path, concurrent.futures.Future] = {}
     with ThreadPoolExecutor(max_workers=jobs) as executor:

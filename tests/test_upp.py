@@ -246,7 +246,7 @@ def test_cli_rejects_directory(tmp_path):
     assert "is a directory" in result.output
 
 
-def test_cli_recursive_expands_glob_patterns(tmp_path, monkeypatch):
+def test_cli_glob_expands_patterns(tmp_path, monkeypatch):
     (tmp_path / "sub" / "deep").mkdir(parents=True)
     top = tmp_path / "top.uc"
     nested = tmp_path / "sub" / "deep" / "nested.uc"
@@ -256,7 +256,7 @@ def test_cli_recursive_expands_glob_patterns(tmp_path, monkeypatch):
         p.write_text(source)
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(main, ["-r", "**/*.uc"])
+    result = CliRunner().invoke(main, ["--glob", "**/*.uc"])
 
     assert result.exit_code == 0, result.output
     expected = process_source(source, {"dev_build": False})
@@ -265,13 +265,22 @@ def test_cli_recursive_expands_glob_patterns(tmp_path, monkeypatch):
     assert other.read_text() == source
 
 
-def test_cli_glob_pattern_without_recursive_is_rejected(tmp_path, monkeypatch):
+def test_cli_glob_pattern_without_glob_option_is_rejected(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(main, ["*.uc"])
 
     assert result.exit_code == 2
     assert "does not exist" in result.output
+
+
+def test_cli_help_describes_glob_expansion():
+    result = CliRunner().invoke(main, ["--help"])
+    help_text = " ".join(result.output.split())
+
+    assert result.exit_code == 0
+    assert "--glob" in help_text
+    assert "** matches across directories" in help_text
 
 
 def test_unmatched_endif_is_rejected():
