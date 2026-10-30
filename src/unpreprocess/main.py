@@ -380,6 +380,7 @@ def process_file(file: Path, dry_run: bool = False):
 @click.option(
     "--glob",
     "-g",
+    "expand_globs",
     is_flag=True,
     default=False,
     help="Expand file arguments as glob patterns. ** matches recursively.",

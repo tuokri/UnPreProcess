@@ -229,6 +229,52 @@ def test_cli_error_preserves_input(
     assert path.read_bytes() == original
 
 
+def test_cli_defines_macros(tmp_path, monkeypatch):
+    defined_name = "CLI_TEST_DEFINED"
+    truthy_name = "CLI_TEST_TRUTHY"
+    monkeypatch.delitem(MACRO_DEFINITIONS, defined_name, raising=False)
+    monkeypatch.delitem(MACRO_DEFINITIONS, truthy_name, raising=False)
+
+    path = tmp_path / "input.uc"
+    path.write_text(
+        f"`ifdef({defined_name})\n"
+        "name is defined\n"
+        "`else\n"
+        "name is missing\n"
+        "`endif\n"
+        f"`if({truthy_name})\n"
+        "value is truthy\n"
+        "`else\n"
+        "value is falsy\n"
+        "`endif\n"
+    )
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "--define",
+            f"{defined_name}=1",
+            "-d",
+            f"{truthy_name}=enabled",
+            str(path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert path.read_text() == (
+        f"///---> `ifdef({defined_name})\n"
+        "name is defined\n"
+        "///---> `else\n"
+        "///---> name is missing\n"
+        "///---> `endif\n"
+        f"///---> `if({truthy_name})\n"
+        "value is truthy\n"
+        "///---> `else\n"
+        "///---> value is falsy\n"
+        "///---> `endif\n"
+    )
+
+
 def test_cli_rejects_missing_file(tmp_path):
     path = tmp_path / "missing.uc"
 
@@ -280,7 +326,7 @@ def test_cli_help_describes_glob_expansion():
 
     assert result.exit_code == 0
     assert "--glob" in help_text
-    assert "** matches across directories" in help_text
+    assert "** matches recursively" in help_text
 
 
 def test_unmatched_endif_is_rejected():
